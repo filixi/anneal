@@ -28,7 +28,7 @@ struct NQueensSolution
     return solution[pos];
   }
   
-  void swap(NQueensSolution<kN> &y) {
+  void Swap(NQueensSolution<kN> &y) {
     assert(y.mutate_ready);
     
     NQueensSolution<kN> &x = *this;
@@ -48,14 +48,14 @@ struct NQueensSolution
   int mutate_pos = 0;
   int mutate_value = 0;
   
-  static constexpr auto N = kN;
+  static constexpr auto n = kN;
 };
 
 // Annealing Package specialized for N queens problem
 // After debugging, inheritance can be removed for better performance.
 template <size_t kN, class Solution = NQueensSolution<kN> >
 class NQueensProblem : public anneal::ProblemInterface<Solution> {
-public:
+ public:
   using SolutionType = Solution;
   
   void NewSolution(SolutionType &solution) override {
@@ -71,8 +71,7 @@ public:
     CostFunctionDelta(from,to);
   }
   
-private:
-  double CostFunction(const SolutionType &solution) {
+  double CostFunction(SolutionType &solution) override {
     double cost = 0;
     for (int i=0; i<kN; ++i)
       for (int j=i+1; j<kN; ++j)
@@ -81,6 +80,7 @@ private:
     return cost;
   }
   
+ private:
   void CostFunctionDelta(const SolutionType &from, SolutionType &to) {
     assert(to.mutate_ready);
     
