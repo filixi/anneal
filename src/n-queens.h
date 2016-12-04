@@ -15,41 +15,37 @@ namespace nqueens {
 
 // N Queens problem solution holder
 template <size_t kN>
-struct NQueensSolution
+class NQueensSolution
     : public anneal::SolutionInterface<NQueensSolution<kN> > {
-  NQueensSolution() : solution(kN) {}
+ public:
+  NQueensSolution() : solution_(kN) {}
   NQueensSolution(const NQueensSolution &) = default;
     
   int &operator[](const size_t pos) {
-    return solution[pos];
+    return solution_[pos];
   }
   
   int operator[](const size_t pos) const {
-    return solution[pos];
-  }
-  
-  void Swap(NQueensSolution<kN> &y) {
-    assert(y.mutate_ready);
-    
-    NQueensSolution<kN> &x = *this;
-    x[y.mutate_pos] = y.mutate_value;
-    x.quality = y.quality;
-    y.mutate_ready = false;
+    return solution_[pos];
   }
   
   double Quality() const override {
-    return quality;
+    return quality_;
   }
   
-  std::vector<int> solution;
-  double quality = 0.0;
-  
-  bool mutate_ready = false;
-  int mutate_pos = 0;
-  int mutate_value = 0;
+  double &Quality() {
+    return quality_;
+  }
   
   static constexpr auto n = kN;
+  
+ private:
+  std::vector<int> solution_;
+  double quality_ = 0.0;
 };
+
+template <class Solution, class Problem>
+class MutatorManager;
 
 // Annealing Package specialized for N queens problem
 // After debugging, inheritance can be removed for better performance.
@@ -57,18 +53,18 @@ template <size_t kN, class Solution = NQueensSolution<kN> >
 class NQueensProblem : public anneal::ProblemInterface<Solution> {
  public:
   using SolutionType = Solution;
+  using MutatorManagerType = MutatorManager<NQueensProblem, Solution>;
   
-  void NewSolution(SolutionType &solution) override {
+  Solution NewSolution() override {
+    Solution solution;
+    std::mt19937 random_engine{std::random_device{}()};
+    std::uniform_int_distribution<int> uniform(0,kN-1);
+    
     for (int i=0; i<kN; ++i)
-      solution[i] = uniform_(random_engine_);
-    solution.quality = CostFunction(solution);
-  }
-  
-  void Mutate(SolutionType &from, SolutionType &to) override {
-    to.mutate_pos = uniform_(random_engine_);
-    to.mutate_value = uniform_(random_engine_);
-    to.mutate_ready = true;
-    CostFunctionDelta(from,to);
+      solution[i] = uniform(random_engine);
+    solution.Quality() = CostFunction(solution);
+    
+    return solution;
   }
   
   double CostFunction(SolutionType &solution) override {
@@ -80,28 +76,83 @@ class NQueensProblem : public anneal::ProblemInterface<Solution> {
     return cost;
   }
   
- private:
-  void CostFunctionDelta(const SolutionType &from, SolutionType &to) {
-    assert(to.mutate_ready);
-    
-    to.quality = from.quality;
-    for (int i=0; i<kN; ++i)
-      if (from[i]==from[to.mutate_pos] ||
-        abs(from[i]-from[to.mutate_pos])==abs(i-to.mutate_pos))
-      --to.quality;
-    ++to.quality; // adjust for i==to.mutate_pos
-    
-    for (int i=0; i<kN; ++i)
-      if (from[i]==to.mutate_value ||
-        abs(from[i]-to.mutate_value)==abs(i-to.mutate_pos))
-      ++to.quality;
-      
-    if (from[to.mutate_pos] == to.mutate_value)
-      --to.quality;
-  }
+  static constexpr auto n = kN;
+};
 
+template <class Solution, class Problem>
+class SwapMutator {
+ public:
+  template <class Distribution, class Engine, class... Args>
+  void MutateFrom(const Solution &from, Distribution &&distribution,
+      Engine &&engine) {
+    mutate_pos_ =
+      std::forward<Distribution>(distribution)(std::forward<Engine>(engine));
+    mutate_value_ =
+      std::forward<Distribution>(distribution)(std::forward<Engine>(engine));
+  }
+  
+  double DeltaQuality(const Problem &problem, const Solution &from) {
+    delta_quality_ = 0.0;
+    
+    for (int i=0; i<problem.n; ++i)
+      if (from[i]==from[mutate_pos_] ||
+          abs(from[i]-from[mutate_pos_])==abs(i-mutate_pos_))
+      --delta_quality_;
+    ++delta_quality_; // adjust for i==to.mutate_pos
+    
+    for (int i=0; i<problem.n; ++i)
+      if (from[i]==mutate_value_ ||
+          abs(from[i]-mutate_value_)==abs(i-mutate_pos_))
+      ++delta_quality_;
+      
+    if (from[mutate_pos_] == mutate_value_)
+      --delta_quality_;
+    
+    return delta_quality_;
+  }
+  
+  void Mutate(Solution &from) {
+    from[mutate_pos_] = mutate_value_;
+    from.Quality() += delta_quality_;
+  }
+  
+ private:
+  int mutate_pos_ = 0;
+  int mutate_value_ = 0;
+  
+  double delta_quality_ = 0.0;
+};
+
+template <class Problem, class Solution>
+class MutatorManager :
+    public anneal::MutatorManagerInterface<Problem, Solution> {
+ public:
+  void MutateFrom(const Solution &from) override {
+    mutator.MutateFrom(from, uniform_, random_engine_);
+    mutate_ready = true;
+  }
+  
+  double DeltaQuality(const Problem &problem, const Solution &x) override {
+    assert(mutate_ready);
+    return mutator.DeltaQuality(problem, x);
+  }
+  
+  void Mutate(Solution &x) override {
+    assert(mutate_ready);
+    mutator.Mutate(x);
+    mutate_ready = false;
+  }
+  
+ private:
+  bool mutate_ready = false;
+  SwapMutator<Solution, Problem> mutator;
+  
+  auto Random() {
+    return uniform_(random_engine_);
+  }
+  
+  std::uniform_int_distribution<int> uniform_{0,Solution::n-1};
   std::mt19937 random_engine_{std::random_device{}()};
-  std::uniform_int_distribution<int> uniform_{0,kN-1};
 };
 
 } // namespace nqueens

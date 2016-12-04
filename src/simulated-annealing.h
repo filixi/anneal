@@ -10,72 +10,75 @@ namespace anneal {
 
 class SimulatedAnnealing {
  public:
-  template <class TemperaturePolicy, class ProblemPackage>
-  auto operator()(TemperaturePolicy &&temperature, ProblemPackage &&problem) {
-    using SolutionType =
-      typename std::decay<ProblemPackage>::type::SolutionType;
-    
-    SolutionType solution, alter;
-    std::forward<ProblemPackage>(problem).NewSolution(solution);
+  template <class TemperaturePolicy, class Problem>
+  auto operator()(TemperaturePolicy &&temperature, Problem &&problem) {
+    using ProblemType = typename std::decay<Problem>::type;
+    typename ProblemType::MutatorManagerType mutator_manager;
+    auto solution = std::forward<Problem>(problem).NewSolution();
     
     while (!std::forward<TemperaturePolicy>(temperature).Quit(solution)) {
-      std::forward<ProblemPackage>(problem).Mutate(solution, alter);
-      if (std::forward<TemperaturePolicy>(temperature).Accept(solution, alter))
-        solution.Swap(alter);
+      mutator_manager.MutateFrom(solution);
+      const auto accept = temperature.Accept(mutator_manager.DeltaQuality(
+          std::forward<Problem>(problem), solution));
+
+      if ( accept )
+        mutator_manager.Mutate(solution);
     }
     
     return solution;
   }
   
-  template <class ProblemPackage>
-  void Debug(ProblemPackage &&problem) {
-    using SolutionType =
-      typename std::decay<ProblemPackage>::type::SolutionType;
-    SolutionType solution, alter;
-    std::forward<ProblemPackage>(problem).NewSolution(solution);
+  template <class Problem>
+  void Debug(Problem &&problem) {
+    using ProblemType = typename std::decay<Problem>::type;
+    typename ProblemType::MutatorManagerType mutator_manager;
+    auto solution = std::forward<Problem>(problem).NewSolution();
     
     for (int i=0; i<1000; ++i) {
-      double quality_solution = solution.Quality();
-      std::forward<ProblemPackage>(problem).Mutate(solution, alter);
-      assert(solution.Quality() == quality_solution);
-      
-      double quality_alter = alter.Quality();
-      solution.Swap(alter);
-      assert(solution.Quality() == quality_alter);
-      auto temp = solution;
-      assert(std::forward<ProblemPackage>(problem).CostFunction(temp) ==
-        quality_alter);
+      const auto old_quality = solution.Quality();
+      mutator_manager.MutateFrom(solution);
+      const auto delta_quality = mutator_manager.DeltaQuality(
+          std::forward<Problem>(problem), solution);
+      mutator_manager.Mutate(solution);
+      assert(old_quality+delta_quality == solution.Quality());
     }
   }
 };
 
-template <class SolutionType>
+template <class Problem, class Solution>
+class MutatorManagerInterface {
+ public:
+  virtual void MutateFrom(const Solution &) = 0;
+  virtual double DeltaQuality(const Problem &, const Solution &) = 0;
+  virtual void Mutate(Solution &) = 0;
+  virtual ~MutatorManagerInterface() = default;
+};
+
+template <class Solution>
 class SolutionInterface {
  public:
   virtual double Quality() const = 0;
-  virtual void Swap(SolutionType &) = 0;
   virtual ~SolutionInterface() = default;
 };
 
-template <class SolutionType>
+template <class Solution>
 class ProblemInterface {
  public:
-  virtual void NewSolution(SolutionType &) = 0;
-  virtual void Mutate(SolutionType &from, SolutionType &to) = 0;
-  virtual double CostFunction(SolutionType &) = 0;
+  virtual Solution NewSolution() = 0;
+  virtual double CostFunction(Solution &) = 0;
   virtual ~ProblemInterface() = default;
 };
 
-template <class SolutionType>
+template <class Solution>
 class TemperatureInterface {
  public:
-  virtual bool Quit(const SolutionType &) = 0;
-  virtual bool Accept(const SolutionType &from, const SolutionType &to) = 0;
+  virtual bool Quit(const Solution &) = 0;
+  virtual bool Accept(const double delta) = 0;
   virtual ~TemperatureInterface() = default;
 };
 
-template <class SolutionType>
-class TemperatureBasic : public TemperatureInterface<SolutionType> {
+template <class Solution>
+class TemperatureBasic : public TemperatureInterface<Solution> {
  public:
   TemperatureBasic() = default;
   TemperatureBasic(const int step_interval, const double initial_temperature)
@@ -83,22 +86,21 @@ class TemperatureBasic : public TemperatureInterface<SolutionType> {
   TemperatureBasic(const TemperatureBasic &) = default;
   TemperatureBasic &operator=(const TemperatureBasic &) = default;
   
-  bool Quit(const SolutionType &x) {
+  bool Quit(const Solution &x) {
     ++times_iteration_;
     if (times_iteration_%kStepInterval==0)
       temperature_*=0.99;
     
     if (x.Quality()==0)
       return true;
-    else if (temperature_<=0.01)
+    else if (temperature_<=0.00001)
       return true;
     else
       return false;
   }
   
-  bool Accept(const SolutionType &from, const SolutionType &to) {
-    if (to.Quality() <= from.Quality() ||
-      random() <= ::exp((from.Quality()-to.Quality())/temperature_))
+  bool Accept(const double delta) override {
+    if (delta<0 || random() <= ::exp(-delta/temperature_))
       return true;
     else
       return false;
