@@ -80,15 +80,18 @@ class NQueensProblem : public anneal::ProblemInterface<Solution> {
 };
 
 template <class Solution, class Problem>
-class SwapMutator {
+class AlterMutator {
  public:
-  template <class Distribution, class Engine, class... Args>
-  void MutateFrom(const Solution &from, Distribution &&distribution,
-      Engine &&engine) {
-    mutate_pos_ =
-      std::forward<Distribution>(distribution)(std::forward<Engine>(engine));
-    mutate_value_ =
-      std::forward<Distribution>(distribution)(std::forward<Engine>(engine));
+  template <class Distribution, class Engine>
+  void Premutate(Distribution &d, Engine &e) {
+    mutate_pos_ = d(e);
+    mutate_value_ = d(e);
+  }
+ 
+  template <class Distribution, class Engine>
+  void MutateFrom(const Solution &from, Distribution &d, Engine &e) {
+    //mutate_pos_ = d(e);
+    //mutate_value_ = d(e);
   }
   
   double DeltaQuality(const Problem &problem, const Solution &from) {
@@ -127,25 +130,30 @@ template <class Problem, class Solution>
 class MutatorManager :
     public anneal::MutatorManagerInterface<Problem, Solution> {
  public:
+  void Premutate() override {
+    mutator_.Premutate(uniform_, random_engine_);
+    mutate_ready_ = true;
+  }
+ 
   void MutateFrom(const Solution &from) override {
-    mutator.MutateFrom(from, uniform_, random_engine_);
-    mutate_ready = true;
+    //mutator.MutateFrom(from, uniform_, random_engine_);
+    //mutate_ready_ = true;
   }
   
   double DeltaQuality(const Problem &problem, const Solution &x) override {
-    assert(mutate_ready);
-    return mutator.DeltaQuality(problem, x);
+    assert(mutate_ready_);
+    return mutator_.DeltaQuality(problem, x);
   }
   
   void Mutate(Solution &x) override {
-    assert(mutate_ready);
-    mutator.Mutate(x);
-    mutate_ready = false;
+    assert(mutate_ready_);
+    mutator_.Mutate(x);
+    mutate_ready_ = false;
   }
   
  private:
-  bool mutate_ready = false;
-  SwapMutator<Solution, Problem> mutator;
+  bool mutate_ready_ = false;
+  AlterMutator<Solution, Problem> mutator_;
   
   auto Random() {
     return uniform_(random_engine_);

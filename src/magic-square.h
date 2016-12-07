@@ -130,12 +130,17 @@ template <class Problem, class Solution>
 class SwapMutator {
  public:
   SwapMutator() : sum_row_(kN), sum_col_(kN) {}
- 
+  
   template <class RandomEngine, class Distribution>
-  void MutateFrom(const Solution &from, RandomEngine &e, Distribution &d) {
+  void Premutate(RandomEngine &e, Distribution &d) {
     mutate_pos_b_ = mutate_pos_a_ = d(e);
     while (mutate_pos_b_ == mutate_pos_a_)
       mutate_pos_b_ = d(e);
+  }
+ 
+  template <class RandomEngine, class Distribution>
+  void MutateFrom(const Solution &from, RandomEngine &e, Distribution &d) {
+    
   }
   
   double DeltaQuality(const Problem &problem, const Solution &from) {
@@ -212,9 +217,14 @@ template <class Problem, class Solution>
 class MutatorManager
     : public anneal::MutatorManagerInterface<Problem, Solution> {
  public:
-  void MutateFrom(const Solution &from) {
-    swap_mutator_.MutateFrom(from, random_engine_, uniform_);
+  void Premutate() override {
+    swap_mutator_.Premutate(random_engine_, uniform_);
     mutate_ready_ = true;
+  }
+  
+  void MutateFrom(const Solution &from) {
+    //swap_mutator_.MutateFrom(from, random_engine_, uniform_);
+    //mutate_ready_ = true;
   }
   
   double DeltaQuality(const Problem &problem, const Solution &x) {
