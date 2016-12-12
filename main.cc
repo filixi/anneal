@@ -1,13 +1,14 @@
 #include "src/magic-square.h"
 #include "src/n-queens.h"
 #include "src/simulated-annealing.h"
+#include "src/tsp.h"
 
 #include <chrono>
 #include <exception>
 #include <iostream>
 
 void NQueensExemple() {
-  nqueens::NQueensProblem<200> n_queens;
+  nqueens::NQueensProblem<400> n_queens;
   anneal::TemperatureBasic<decltype(n_queens)::SolutionType> policy;
   anneal::SimulatedAnnealing simulated_annealing;
 
@@ -37,10 +38,34 @@ void MagicSquareExemple() {
   std::cout << std::endl;
 }
 
+void TspExemple() {
+  const size_t kN = 10;
+  double adj[kN][kN] = {0.0};
+  
+  std::mt19937 random_engine{std::random_device{}()};
+  std::uniform_real_distribution<float> uniform{0,1};
+  
+  for (size_t i=0; i<kN; ++i)
+    for (size_t j=i+1; j<kN; ++j)
+      adj[i][j] = adj[j][i] = uniform(random_engine);
+      
+  tsp::TspProblem<kN> problem(adj);
+  anneal::TemperatureBasic<decltype(problem)::SolutionType> policy;
+  anneal::SimulatedAnnealing simulated_annealing;
+  
+  simulated_annealing.Debug(problem);
+  auto solution = simulated_annealing(policy, problem);
+  
+  std::cout << solution.Quality() << std::endl;
+  for (size_t i=0; i<solution.n; ++i)
+    std::cout << solution[i] << " ";
+  std::cout << std::endl;
+}
+
 int main() {
   const auto time = std::chrono::steady_clock::now();
   
-  NQueensExemple();
+  TspExemple();
   
   const auto duration = std::chrono::steady_clock::now() - time;
   std::cout << duration.count() << std::endl;

@@ -219,12 +219,11 @@ class MutatorManager
  public:
   void Premutate() override {
     swap_mutator_.Premutate(random_engine_, uniform_);
-    mutate_ready_ = true;
   }
   
   void MutateFrom(const Solution &from) {
     //swap_mutator_.MutateFrom(from, random_engine_, uniform_);
-    //mutate_ready_ = true;
+    mutate_ready_ = true;
   }
   
   double DeltaQuality(const Problem &problem, const Solution &x) {

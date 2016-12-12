@@ -69,7 +69,9 @@ class SimulatedAnnealing {
       const auto delta_quality = mutator_manager.DeltaQuality(
           std::forward<Problem>(problem), solution);
       mutator_manager.Mutate(solution);
-      assert(old_quality+delta_quality == solution.Quality());
+
+      assert(old_quality+delta_quality ==
+        std::forward<Problem>(problem).CostFunction(solution));
     }
   }
   
@@ -177,11 +179,7 @@ class TemperatureBasic {
   
   template <class RandomEngine, class Distribution>
   bool Accept(const double delta, RandomEngine &e, Distribution &d) {
-    if (delta<0 || d(e) <= ::exp(-delta*1000.0/temperature_.load())) {
-      return true;
-    }
-    else
-      return false;
+    return delta<0 || d(e) <= ::exp(-delta*1000.0/temperature_.load());
   }
   
  private:
