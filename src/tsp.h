@@ -148,13 +148,13 @@ class InsertMutator : public Mutator<Problem, Solution> {
     const auto &adj = problem.adjacency_matrix_;
     
     if (solution.At(from_pos_+1) != solution[to_pos_]) {
-      delta_ -= adj[solution.At(from_pos_-1)][solution[from_pos_]] +
-        adj[solution[from_pos_]][solution.At(from_pos_+1)] + 
-        adj[solution.At(to_pos_-1)][solution[to_pos_]];
+      delta_ = -adj[solution.At(from_pos_-1)][solution[from_pos_]] -
+          adj[solution[from_pos_]][solution.At(from_pos_+1)] - 
+          adj[solution.At(to_pos_-1)][solution[to_pos_]];
         
       delta_ += adj[solution.At(from_pos_-1)][solution.At(from_pos_+1)] +
-        adj[solution.At(to_pos_-1)][solution[from_pos_]] + 
-        adj[solution[from_pos_]][solution[to_pos_]];
+          adj[solution.At(to_pos_-1)][solution[from_pos_]] + 
+          adj[solution[from_pos_]][solution[to_pos_]];
     }
 
     return delta_;
@@ -165,7 +165,7 @@ class InsertMutator : public Mutator<Problem, Solution> {
       auto temp = solution[from_pos_];
       for (int i=from_pos_; i>to_pos_; --i) // to_pos_ is moved backward
         solution[i] = solution[i-1];
-      solution[to_pos_] = temp; 
+      solution[to_pos_] = temp;
     } else {
       auto temp = solution[from_pos_];
       for (int i=from_pos_; i<to_pos_-1; ++i) // to_pos_ isn't moved forward
@@ -203,11 +203,11 @@ class InverseMutator : public Mutator<Problem, Solution> {
     const auto &adj = problem.adjacency_matrix_;
     
     if (left_pos_-1+solution.n != right_pos_) {
-      delta_ -= adj[solution.At(left_pos_-1)][solution[left_pos_]] +
-        adj[solution[right_pos_]][solution.At(right_pos_+1)];
+      delta_ = -adj[solution.At(left_pos_-1)][solution[left_pos_]] -
+          adj[solution[right_pos_]][solution.At(right_pos_+1)];
       
       delta_ += adj[solution.At(left_pos_-1)][solution[right_pos_]] +
-        adj[solution[left_pos_]][solution.At(right_pos_+1)];
+          adj[solution[left_pos_]][solution.At(right_pos_+1)];
     }
     
     return delta_;

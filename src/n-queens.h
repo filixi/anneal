@@ -166,4 +166,3 @@ class MutatorManager :
 } // namespace nqueens
 
 #endif // _ANNEAL_N_QUEENS_H_
-

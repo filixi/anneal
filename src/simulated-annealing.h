@@ -19,14 +19,11 @@ class SimulatedAnnealing {
     typename ProblemType::MutatorManagerType mutator_manager;
     auto solution = std::forward<Problem>(problem).NewSolution();
 
-    std::mt19937 random_engine(std::random_device{}());
-    std::uniform_real_distribution<float> uniform(0,1);
-    
     while (!std::forward<TemperaturePolicy>(temperature).Quit(solution)) {
       mutator_manager.Premutate();
       mutator_manager.MutateFrom(solution);
       const auto accept = temperature.Accept(mutator_manager.DeltaQuality(
-          std::forward<Problem>(problem), solution), random_engine, uniform);
+          std::forward<Problem>(problem), solution));
 
       if ( accept )
         mutator_manager.Mutate(solution);
@@ -94,10 +91,7 @@ void SimulatedAnnealing::Worker(TemperaturePolicy &&temperature,
                                 Solution &solution) {
   using ProblemType = typename std::decay<Problem>::type;
   typename ProblemType::MutatorManagerType mutator_manager;
-  
-  std::mt19937 random_engine(std::random_device{}());
-  std::uniform_real_distribution<float> uniform(0,1);
-  
+
   while (!quit_.load()) {
     mutator_manager.Premutate();
     // Thread may see half mutated solution in reading section, which will not
@@ -108,7 +102,7 @@ void SimulatedAnnealing::Worker(TemperaturePolicy &&temperature,
     const uint32_t old_version = solution_version_.load();
     mutator_manager.MutateFrom(solution);
     const auto accept = temperature.Accept(mutator_manager.DeltaQuality(
-        std::forward<Problem>(problem), solution), random_engine, uniform);
+        std::forward<Problem>(problem), solution));
     // critical section end
     
     if (accept && !quit_.load()) {
@@ -161,34 +155,72 @@ class TemperatureInterface {
 };
 
 template <class Solution>
-class TemperatureBasic {
+class TemperatureBasic : public TemperatureInterface<Solution> {
  public:
-  TemperatureBasic() = default;
-  TemperatureBasic(const int step_interval, const double initial_temperature)
-      : kStepInterval(step_interval), temperature_(initial_temperature) {}
-  TemperatureBasic(const TemperatureBasic &) = default;
-  TemperatureBasic &operator=(const TemperatureBasic &) = default;
-  
-  bool Quit(const Solution &x) {
-    ++times_iteration_;
-    if (times_iteration_.load()%kStepInterval==0)
-      --temperature_;
-    
-    return (x.Quality()==0) || (temperature_.load()<=0);
+  template <class AnnealingDuration, class ClimbingDuration>
+  TemperatureBasic(AnnealingDuration d1, ClimbingDuration d2) {
+    thread_timer_ = std::thread(&TemperatureBasic::Timer, this,
+      std::chrono::steady_clock::now() + d1,
+      std::chrono::steady_clock::now() + d2);
   }
   
-  template <class RandomEngine, class Distribution>
-  bool Accept(const double delta, RandomEngine &e, Distribution &d) {
-    return delta<0 || d(e) <= ::exp(-delta*1000.0/temperature_.load());
+  TemperatureBasic(const TemperatureBasic &) = delete;
+  TemperatureBasic &operator=(const TemperatureBasic &) = delete;
+  
+  ~TemperatureBasic() {
+    thread_timer_.join();
+  }
+  
+  bool Quit(const Solution &x) override {
+    return quit_.load();
+  }
+
+  bool Accept(const double delta) override {
+    static thread_local std::mt19937 e{std::random_device{}()};
+    static thread_local std::uniform_real_distribution<double> d(0, 1);
+    
+    if (delta <= 1e-6)
+      return true;
+    return d(e) <= ::exp(-delta/rate_.load());
+  }
+  
+  void Timer(std::chrono::steady_clock::time_point dead_line1,
+             std::chrono::steady_clock::time_point dead_line2) {
+    static const double T0 = rate_.load();
+    static const double t =
+        (dead_line1 - std::chrono::steady_clock::now()).count();
+
+    for (;;) {
+      auto duration = dead_line1 - std::chrono::steady_clock::now();
+      if (duration.count() <= 0)
+        break;
+      
+      const double x = t - duration.count();
+      
+      rate_.store(T0 - sqrt((t*t-(x-t)*(x-t))*T0*T0/t/t) + 0.01);
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    
+    rate_.store(0);
+    for (;;) {
+      auto duration = dead_line2 - std::chrono::steady_clock::now();
+      if (duration.count() <= 0)
+        break;
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    quit_.store(true);
   }
   
  private:
-  const int32_t kStepInterval = 10000;
-  std::atomic<int32_t> temperature_{2000};
-  std::atomic<int32_t> times_iteration_{0};
+  std::atomic<double> rate_{10};
+  std::atomic<bool> quit_{false};
+  std::thread thread_timer_;
+  
+  static thread_local std::mt19937 e;
+  static thread_local std::uniform_real_distribution<double> d;
 };
 
 } // namespace anneal
 
 #endif // _ANNEAL_SIMULATED_ANNEALING_H_
-

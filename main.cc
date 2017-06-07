@@ -9,7 +9,8 @@
 
 void NQueensExemple() {
   nqueens::NQueensProblem<400> n_queens;
-  anneal::TemperatureBasic<decltype(n_queens)::SolutionType> policy;
+  anneal::TemperatureBasic<decltype(n_queens)::SolutionType> policy(
+      std::chrono::seconds(20), std::chrono::seconds(10));
   anneal::SimulatedAnnealing simulated_annealing;
 
   auto solution = simulated_annealing.MultiThread(policy, n_queens);
@@ -23,19 +24,20 @@ void NQueensExemple() {
 
 void MagicSquareExemple() {
   magicsquare::MagicSquareProblem<200> magic_square;
-  anneal::TemperatureBasic<decltype(magic_square)::SolutionType> policy;
+  anneal::TemperatureBasic<decltype(magic_square)::SolutionType> policy(
+      std::chrono::seconds(20), std::chrono::seconds(10));
   anneal::SimulatedAnnealing simulated_annealing;
 
   auto solution = simulated_annealing.MultiThread(policy, magic_square);
-  
-  std::cout << solution.Quality() << std::endl;
-  
+
   for (int i=0; i<solution.n; ++i) {
     for (int j=0; j<solution.n; ++j)
       std::cout << solution[i][j] << " ";
     std::cout << std::endl;
   }
   std::cout << std::endl;
+  
+  std::cout << solution.Quality() << std::endl;
 }
 
 void TspExemple() {
@@ -50,7 +52,8 @@ void TspExemple() {
       adj[i][j] = adj[j][i] = uniform(random_engine);
       
   tsp::TspProblem<kN> problem(adj);
-  anneal::TemperatureBasic<decltype(problem)::SolutionType> policy;
+  anneal::TemperatureBasic<decltype(problem)::SolutionType> policy(
+      std::chrono::seconds(20), std::chrono::seconds(10));
   anneal::SimulatedAnnealing simulated_annealing;
   
   simulated_annealing.Debug(problem);
@@ -63,12 +66,7 @@ void TspExemple() {
 }
 
 int main() {
-  const auto time = std::chrono::steady_clock::now();
-  
-  TspExemple();
-  
-  const auto duration = std::chrono::steady_clock::now() - time;
-  std::cout << duration.count() << std::endl;
+  NQueensExemple();
   
   return 0;
 }
